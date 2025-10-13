@@ -1,2 +1,17 @@
 .venv
 .env
+credentials.json
+token.json
+*.png
+*.html
+debug_*
+email_content_debug.py
+.gitignore
+linxo_transactions.csv
+.gitignore
+test_gmail.py
+email_debug.py
+.gitignore
+test_verification.py
+test_output.csv
+test_gmail_codes.py
