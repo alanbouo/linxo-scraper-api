@@ -7,6 +7,7 @@ A FastAPI-based service that exports transaction data from Linxo to CSV format.
 - Secure authentication using environment variables
 - Headless browser automation with Playwright
 - CSV export functionality
+- Integration with n8n via webhook for automated data processing
 - Environment-based configuration
 
 ## Prerequisites
@@ -51,6 +52,9 @@ A FastAPI-based service that exports transaction data from Linxo to CSV format.
    LINXO_EMAIL=your_email@example.com
    LINXO_PASSWORD=your_secure_password
    
+   # Optional: n8n webhook URL for sending CSV data
+   N8N_WEBHOOK_URL=https://your-n8n-instance.com/webhook/your-webhook-id
+   
    # Optional: Server configuration
    HOST=0.0.0.0
    PORT=8000
@@ -65,11 +69,19 @@ A FastAPI-based service that exports transaction data from Linxo to CSV format.
 
 2. Access the API at `http://localhost:8000/export-csv`
 
-3. The API will return a CSV file containing your transaction data.
+3. The API will send the CSV data to your n8n webhook (if configured), save it locally as `linxo_transactions.csv`, and return a JSON response with the status of the operation.
 
 ## API Endpoint
 
-- `GET /export-csv`: Exports Linxo transaction data to CSV format.
+- `GET /export-csv`: Exports Linxo transaction data, sends it to an n8n webhook if configured, saves it locally, and returns a JSON status response.
+
+## Debugging Webhook Integration
+
+If you're having issues with the n8n webhook:
+
+1. Run the test script: `python test_webhook.py`
+2. Check the detailed debugging guide: [WEBHOOK_DEBUG.md](WEBHOOK_DEBUG.md)
+3. Review the API response JSON for the `webhook_error` field
 
 ## Security
 

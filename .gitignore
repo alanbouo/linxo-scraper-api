@@ -15,3 +15,6 @@ email_debug.py
 test_verification.py
 test_output.csv
 test_gmail_codes.py
+.DS_Store
+test_webhook.py
+WEBHOOK_DEBUG.md

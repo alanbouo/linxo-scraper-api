@@ -118,11 +118,12 @@ async def teardown_playwright(playwright, browser, context):
         await playwright.stop()
 
 @app.get("/export-csv", response_description="CSV file with transaction data")
-async def export_linxo_csv() -> StreamingResponse:
+async def export_linxo_csv() -> JSONResponse:
     """Export transaction data from Linxo to CSV"""
     # Get credentials from environment
     email = os.getenv("LINXO_EMAIL")
     password = os.getenv("LINXO_PASSWORD")
+    webhook_url = os.getenv("N8N_WEBHOOK_URL")
     
     if not email or not password:
         error_msg = "Missing Linxo credentials in environment variables"
@@ -571,17 +572,88 @@ async def export_linxo_csv() -> StreamingResponse:
             await teardown_playwright(playwright, browser, context)
         except Exception as e:
             logger.error(f"Error during cleanup: {str(e)}", exc_info=True)
-        
-    # Stream CSV back with proper headers
-    logger.info("Sending CSV response")
-    return StreamingResponse(
-        io.BytesIO(csv_content),
-        media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": "attachment; filename=linxo_transactions.csv",
-            "Content-Type": "text/csv; charset=utf-8"
-        }
-    )
+    
+    # Send CSV to n8n webhook first
+    logger.info("Sending CSV to n8n webhook...")
+    webhook_success = False
+    webhook_error = None
+    if webhook_url:
+        try:
+            logger.info(f"Webhook URL: {webhook_url}")
+            logger.info(f"Original CSV content size: {len(csv_content)} bytes")
+            
+            # Convert CSV from UTF-16 to UTF-8 for better n8n compatibility
+            try:
+                # Try UTF-16 LE (Little Endian) first - most common for Windows/Linxo
+                csv_text = csv_content.decode('utf-16-le')
+                logger.info("Decoded CSV as UTF-16 LE")
+            except UnicodeDecodeError:
+                try:
+                    # Try UTF-16 BE (Big Endian) as fallback
+                    csv_text = csv_content.decode('utf-16-be')
+                    logger.info("Decoded CSV as UTF-16 BE")
+                except UnicodeDecodeError:
+                    # If both fail, try UTF-8 (maybe it's already UTF-8)
+                    csv_text = csv_content.decode('utf-8')
+                    logger.info("CSV is already UTF-8")
+            
+            # Re-encode as UTF-8
+            csv_utf8 = csv_text.encode('utf-8')
+            logger.info(f"Converted CSV to UTF-8, new size: {len(csv_utf8)} bytes")
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    webhook_url,
+                    content=csv_utf8,
+                    headers={
+                        "Content-Type": "text/csv; charset=utf-8",
+                        "Content-Length": str(len(csv_utf8))
+                    }
+                )
+                logger.info(f"Webhook response status: {response.status_code}")
+                logger.info(f"Webhook response body: {response.text[:200]}")
+                if response.status_code == 200:
+                    webhook_success = True
+                    logger.info("CSV successfully sent to n8n webhook")
+                else:
+                    webhook_error = f"Status {response.status_code}: {response.text[:200]}"
+                    logger.warning(f"n8n webhook returned non-200 status: {webhook_error}")
+        except httpx.TimeoutException as e:
+            webhook_error = f"Timeout: {str(e)}"
+            logger.error(f"Timeout sending CSV to n8n: {str(e)}")
+        except httpx.RequestError as e:
+            webhook_error = f"Request error: {str(e)}"
+            logger.error(f"Request error sending CSV to n8n: {str(e)}")
+        except Exception as e:
+            webhook_error = f"Unexpected error: {str(e)}"
+            logger.error(f"Unexpected error sending CSV to n8n: {str(e)}")
+    else:
+        webhook_error = "N8N_WEBHOOK_URL not configured"
+        logger.warning("N8N_WEBHOOK_URL not set, skipping webhook send")
+
+    # Save CSV locally after webhook attempt
+    logger.info("Saving CSV locally...")
+    local_save_path = "linxo_transactions.csv"
+    try:
+        with open(local_save_path, "wb") as f:
+            f.write(csv_content)
+        logger.info(f"CSV saved locally to {local_save_path}")
+        local_save_success = True
+    except Exception as e:
+        logger.error(f"Error saving CSV locally: {str(e)}")
+        local_save_success = False
+
+    # Return JSON response with status
+    response_data = {
+        "message": "CSV export completed",
+        "webhook_sent": webhook_success,
+        "webhook_error": webhook_error if not webhook_success else None,
+        "local_save_success": local_save_success,
+        "local_save_path": local_save_path if local_save_success else None,
+        "csv_size_bytes": len(csv_content)
+    }
+    logger.info(f"Returning status response: {response_data}")
+    return JSONResponse(content=response_data)
 
 if __name__ == "__main__":
     import uvicorn
