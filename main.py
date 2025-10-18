@@ -14,38 +14,6 @@ import httpx
 from typing import Dict, Any, Optional, Tuple
 from gmail_helper import get_linxo_verification_code
 
-# Debug breakpoint function
-async def debug_breakpoint(step_name: str, page=None):
-    """Pause execution and wait for user input"""
-    print("\n" + "="*80)
-    print(f"🔴 BREAKPOINT: {step_name}")
-    if page:
-        try:
-            screenshot_path = f"debug_{step_name.lower().replace(' ', '_')}.png"
-            await page.screenshot(path=screenshot_path)
-            print(f"📸 Screenshot saved to: {screenshot_path}")
-            
-            # Get page content for debugging
-            content = await page.content()
-            with open('debug_page.html', 'w', encoding='utf-8') as f:
-                f.write(content)
-            print("📄 Page HTML saved to: debug_page.html")
-            
-            # Print current URL and title
-            print(f"🌐 Current URL: {page.url}")
-            print(f"🏷️  Page title: {await page.title()}")
-            
-        except Exception as e:
-            print(f"⚠️  Could not take screenshot: {str(e)}")
-    
-    print("\n🛑 Press Enter to continue or Ctrl+C to stop...")
-    try:
-        input()
-    except KeyboardInterrupt:
-        print("\n🛑 Execution stopped by user")
-        raise SystemExit(0)
-    print("="*80 + "\n")
-
 # Load environment variables from .env file
 load_dotenv()
 
@@ -565,7 +533,6 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
         
     except PlaywrightError as e:
         error_msg = f"Playwright error: {str(e)}"
-        await debug_breakpoint(f"Error occurred: {error_msg}", page)
         logger.error(error_msg, exc_info=True)
         
         # Take a screenshot if page is available
@@ -586,7 +553,6 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
         
     except Exception as e:
         error_msg = f"Unexpected error: {str(e)}"
-        await debug_breakpoint(f"Unexpected error: {error_msg}", page)
         logger.error(error_msg, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
