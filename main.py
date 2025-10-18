@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Security, Depends
 from fastapi.responses import StreamingResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 import os
 import logging
 import asyncio
@@ -9,6 +10,7 @@ from dotenv import load_dotenv
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
 import tempfile
 import io
+import httpx
 from typing import Dict, Any, Optional, Tuple
 from gmail_helper import get_linxo_verification_code
 
@@ -58,6 +60,30 @@ print("================================\n")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# API Key Security
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    """Verify the API key from the request header"""
+    expected_api_key = os.getenv("API_KEY")
+    
+    if not expected_api_key:
+        logger.error("API_KEY not configured in environment variables")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="API authentication not properly configured"
+        )
+    
+    if api_key != expected_api_key:
+        logger.warning(f"Invalid API key attempt: {api_key[:8]}...")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key"
+        )
+    
+    return api_key
+
 app = FastAPI(
     title="Linxo CSV Exporter",
     description="API to export transaction data from Linxo to CSV",
@@ -90,7 +116,7 @@ async def setup_playwright():
         playwright = await async_playwright().start()
         logger.info("Launching browser...")
         # Set headless=False to see the browser (for debugging)
-        browser = await playwright.chromium.launch(headless=False, args=[
+        browser = await playwright.chromium.launch(headless=True, args=[
             '--disable-blink-features=AutomationControlled',
             '--disable-infobars',
             '--window-size=1920,1080'
@@ -118,7 +144,7 @@ async def teardown_playwright(playwright, browser, context):
         await playwright.stop()
 
 @app.get("/export-csv", response_description="CSV file with transaction data")
-async def export_linxo_csv() -> JSONResponse:
+async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONResponse:
     """Export transaction data from Linxo to CSV"""
     # Get credentials from environment
     email = os.getenv("LINXO_EMAIL")

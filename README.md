@@ -52,6 +52,10 @@ A FastAPI-based service that exports transaction data from Linxo to CSV format.
    LINXO_EMAIL=your_email@example.com
    LINXO_PASSWORD=your_secure_password
    
+   # API Security - REQUIRED for production
+   # Generate a strong random key with: openssl rand -hex 32
+   API_KEY=your_secure_api_key_here
+   
    # Optional: n8n webhook URL for sending CSV data
    N8N_WEBHOOK_URL=https://your-n8n-instance.com/webhook/your-webhook-id
    
@@ -60,6 +64,12 @@ A FastAPI-based service that exports transaction data from Linxo to CSV format.
    PORT=8000
    ```
 
+3. Generate a secure API key:
+   ```bash
+   openssl rand -hex 32
+   ```
+   Copy the output and use it as your `API_KEY` in the `.env` file.
+
 ## Usage
 
 1. Start the server:
@@ -67,13 +77,22 @@ A FastAPI-based service that exports transaction data from Linxo to CSV format.
    python main.py
    ```
 
-2. Access the API at `http://localhost:8000/export-csv`
+2. Access the API at `http://localhost:8000/export-csv` with authentication:
+   ```bash
+   curl -H "X-API-Key: your_api_key_here" http://localhost:8000/export-csv
+   ```
 
 3. The API will send the CSV data to your n8n webhook (if configured), save it locally as `linxo_transactions.csv`, and return a JSON response with the status of the operation.
 
-## API Endpoint
+## API Endpoints
 
+### Protected Endpoints (require API key)
 - `GET /export-csv`: Exports Linxo transaction data, sends it to an n8n webhook if configured, saves it locally, and returns a JSON status response.
+  - **Header required**: `X-API-Key: your_api_key_here`
+
+### Public Endpoints
+- `GET /health`: Health check endpoint (no authentication required)
+- `GET /`: Redirects to API documentation
 
 ## Debugging Webhook Integration
 
@@ -85,9 +104,29 @@ If you're having issues with the n8n webhook:
 
 ## Security
 
+### API Key Authentication
+This API uses API key authentication to prevent unauthorized access. All requests to protected endpoints must include the `X-API-Key` header.
+
+**Important security practices:**
 - Never commit your `.env` file to version control
 - The `.gitignore` file is pre-configured to exclude sensitive files
+- Generate a strong, random API key using `openssl rand -hex 32`
+- Use different API keys for different environments (dev, staging, production)
 - Always use HTTPS in production environments
+- Restrict CORS origins in production (update `allow_origins` in `main.py`)
+- Rotate your API keys regularly
+- Monitor failed authentication attempts in logs
+
+### Example authenticated request:
+```bash
+# Using curl
+curl -H "X-API-Key: your_api_key_here" https://your-domain.com/export-csv
+
+# Using Python requests
+import requests
+headers = {"X-API-Key": "your_api_key_here"}
+response = requests.get("https://your-domain.com/export-csv", headers=headers)
+```
 
 ## License
 

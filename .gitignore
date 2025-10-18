@@ -18,3 +18,5 @@ test_gmail_codes.py
 .DS_Store
 test_webhook.py
 WEBHOOK_DEBUG.md
+SECURITY_SETUP.md
+__pycache__/gmail_helper.cpython-311.pyc
