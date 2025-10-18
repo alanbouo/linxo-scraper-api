@@ -6,6 +6,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Set working directory
+
 WORKDIR /app
 
 # Copy requirements first for better caching
