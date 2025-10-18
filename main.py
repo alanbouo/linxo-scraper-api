@@ -12,7 +12,7 @@ import tempfile
 import io
 import httpx
 from typing import Dict, Any, Optional, Tuple
-from gmail_helper import get_linxo_verification_code
+from gmail_helper import get_linxo_verification_code, verify_gmail_access
 
 # Load environment variables from .env file
 load_dotenv()
@@ -128,6 +128,19 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_msg
         )
+    
+    # Pre-flight check: Verify Gmail API access BEFORE attempting Linxo login
+    logger.info("Pre-flight check: Verifying Gmail API access...")
+    try:
+        await asyncio.to_thread(verify_gmail_access)
+        logger.info("✅ Gmail API pre-flight check passed")
+    except Exception as e:
+        error_msg = f"Gmail API pre-flight check failed: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=error_msg
+        )
         
     logger.info("Starting export process")
 
@@ -176,7 +189,13 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                     continue
             
             if not email_field:
-                raise Exception("Could not find email field on the page")
+                error_msg = "Could not find email field on Linxo login page"
+                logger.error(error_msg)
+                await page.screenshot(path='email_field_not_found.png')
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"{error_msg}. The Linxo website structure may have changed."
+                )
             
             # Fill in the email
             logger.info("Filling email...")
@@ -233,9 +252,13 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                     continue
             
             if not password_field:
-                # Take another screenshot to see what's on the page
+                error_msg = "Could not find password field on Linxo login page"
+                logger.error(error_msg)
                 await page.screenshot(path='password_field_not_found.png')
-                raise Exception("Could not find password field on the page")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"{error_msg}. The Linxo website structure may have changed or login failed."
+                )
             
             # Fill in the password
             logger.info("Filling password...")
@@ -284,7 +307,13 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                     verification_code = await asyncio.to_thread(get_linxo_verification_code, 60)
                     
                     if not verification_code:
-                        raise Exception("Could not retrieve verification code from Gmail")
+                        error_msg = "Could not retrieve verification code from Gmail within 60 seconds"
+                        logger.error(error_msg)
+                        await page.screenshot(path='verification_timeout.png')
+                        raise HTTPException(
+                            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                            detail=f"{error_msg}. Please check if Linxo sent the verification email."
+                        )
                     
                     logger.info(f"Retrieved verification code: {verification_code}")
                     
@@ -356,9 +385,13 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                                 continue
 
                         if not code_entered:
-                            logger.error("Could not find any suitable input field for verification code")
+                            error_msg = "Could not find verification code input field on page"
+                            logger.error(error_msg)
                             await page.screenshot(path='verification_fields_not_found.png')
-                            raise Exception("Could not find verification code input field")
+                            raise HTTPException(
+                                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                detail=f"{error_msg}. The Linxo website structure may have changed."
+                            )
                     
                     # Click validate button
                     logger.info("Looking for validation button...")
@@ -441,7 +474,10 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                             await page.screenshot(path='verification_result.png')
                             logger.info("Screenshot saved to verification_result.png")
 
-                            raise Exception(f"Verification failed - still on verification page. Current URL: {current_url}")
+                            raise HTTPException(
+                                status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail=f"Verification code validation failed. Still on verification page. Current URL: {current_url}"
+                            )
                 else:
                     # Already on secured page
                     logger.info("Successfully logged in without verification code")
@@ -502,9 +538,13 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                     continue
             
             if not csv_button:
-                logger.error("Could not find CSV export button")
+                error_msg = "Could not find CSV export button on transaction history page"
+                logger.error(error_msg)
                 await page.screenshot(path='csv_button_not_found.png')
-                raise Exception("Could not find CSV export button on the page")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"{error_msg}. The Linxo website structure may have changed."
+                )
             
             # Click the CSV export button and wait for download
             logger.info("Clicking CSV export button...")
