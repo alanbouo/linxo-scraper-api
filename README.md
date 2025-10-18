@@ -70,8 +70,18 @@ A FastAPI-based service that exports transaction data from Linxo to CSV format.
    ```
    Copy the output and use it as your `API_KEY` in the `.env` file.
 
-## Usage
+## Deployment
 
+### Coolify Deployment
+This application is ready for deployment on Coolify. See the detailed deployment guide: [COOLIFY_DEPLOYMENT.md](COOLIFY_DEPLOYMENT.md)
+
+**Quick Start:**
+1. Connect your Git repository to Coolify
+2. Configure environment variables (see Configuration section)
+3. Deploy using the included Dockerfile
+4. Your API will be available at the configured domain
+
+### Local Development
 1. Start the server:
    ```bash
    python main.py
@@ -81,8 +91,6 @@ A FastAPI-based service that exports transaction data from Linxo to CSV format.
    ```bash
    curl -H "X-API-Key: your_api_key_here" http://localhost:8000/export-csv
    ```
-
-3. The API will send the CSV data to your n8n webhook (if configured), save it locally as `linxo_transactions.csv`, and return a JSON response with the status of the operation.
 
 ## API Endpoints
 

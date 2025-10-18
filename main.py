@@ -49,12 +49,13 @@ async def debug_breakpoint(step_name: str, page=None):
 # Load environment variables from .env file
 load_dotenv()
 
-# Debug: Check if .env file is loaded and show available variables
-print("\n=== Environment Variables Loaded ===")
-print(f"Current working directory: {os.getcwd()}")
-print(f"LINXO_EMAIL present: {'Yes' if os.getenv('LINXO_EMAIL') else 'No'}")
-print(f"LINXO_PASSWORD present: {'Yes' if os.getenv('LINXO_PASSWORD') else 'No'}")
-print("================================\n")
+# Debug: Check if .env file is loaded and show available variables (only in development)
+if os.getenv('DEBUG', 'false').lower() == 'true':
+    print("\n=== Environment Variables Loaded ===")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"LINXO_EMAIL present: {'Yes' if os.getenv('LINXO_EMAIL') else 'No'}")
+    print(f"LINXO_PASSWORD present: {'Yes' if os.getenv('LINXO_PASSWORD') else 'No'}")
+    print("================================\n")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
