@@ -81,14 +81,18 @@ async def health():
 @app.get("/debug/env")
 async def debug_env(api_key: str = Depends(verify_api_key)):
     """Debug endpoint to check environment variables (requires API key)"""
+    gmail_token = os.getenv("GMAIL_TOKEN_JSON", "")
+    # Show first 10 chars as ASCII codes to debug encoding issues
+    first_10_ascii = [ord(c) for c in gmail_token[:10]] if gmail_token else []
     return {
         "LINXO_EMAIL": "set" if os.getenv("LINXO_EMAIL") else "missing",
         "LINXO_PASSWORD": "set" if os.getenv("LINXO_PASSWORD") else "missing",
         "API_KEY": "set" if os.getenv("API_KEY") else "missing",
         "N8N_WEBHOOK_URL": "set" if os.getenv("N8N_WEBHOOK_URL") else "missing",
-        "GMAIL_TOKEN_JSON": "set" if os.getenv("GMAIL_TOKEN_JSON") else "missing",
-        "GMAIL_TOKEN_JSON_length": len(os.getenv("GMAIL_TOKEN_JSON", "")) if os.getenv("GMAIL_TOKEN_JSON") else 0,
-        "GMAIL_TOKEN_JSON_first_50": os.getenv("GMAIL_TOKEN_JSON", "")[:50] if os.getenv("GMAIL_TOKEN_JSON") else "N/A",
+        "GMAIL_TOKEN_JSON": "set" if gmail_token else "missing",
+        "GMAIL_TOKEN_JSON_length": len(gmail_token),
+        "GMAIL_TOKEN_JSON_first_50": gmail_token[:50] if gmail_token else "N/A",
+        "GMAIL_TOKEN_JSON_first_10_ascii": first_10_ascii,
         "working_directory": os.getcwd(),
         "token_json_file_exists": os.path.exists("token.json")
     }
