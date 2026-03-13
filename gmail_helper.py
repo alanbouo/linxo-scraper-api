@@ -25,7 +25,10 @@ def get_gmail_service():
         try:
             token_data = json.loads(token_json_env)
             creds = Credentials.from_authorized_user_info(token_data, SCOPES)
-            logger.info("Successfully loaded credentials from environment variable")
+            logger.info(f"Successfully loaded credentials from environment variable")
+            logger.info(f"Credentials valid: {creds.valid}, expired: {creds.expired}, has refresh_token: {creds.refresh_token is not None}")
+            if creds.expiry:
+                logger.info(f"Token expiry: {creds.expiry}")
         except Exception as e:
             logger.error(f"Error loading credentials from environment: {str(e)}")
     
