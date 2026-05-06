@@ -147,19 +147,11 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_msg
         )
-    
-    # Pre-flight check: Verify Gmail API access BEFORE attempting Linxo login
-    logger.info("Pre-flight check: Verifying Gmail API access...")
-    try:
-        await asyncio.to_thread(verify_gmail_access)
-        logger.info("✅ Gmail API pre-flight check passed")
-    except Exception as e:
-        error_msg = f"Gmail API pre-flight check failed: {str(e)}"
-        logger.error(error_msg)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=error_msg
-        )
+
+    # Check Gmail availability (optional for the service to work)
+    gmail_available = await asyncio.to_thread(verify_gmail_access)
+    if not gmail_available:
+        logger.warning("Gmail API not available. If Linxo requires 2FA, the export may fail.")
         
     logger.info("Starting export process")
 
@@ -211,9 +203,13 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                 error_msg = "Could not find email field on Linxo login page"
                 logger.error(error_msg)
                 await page.screenshot(path='email_field_not_found.png')
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=f"{error_msg}. The Linxo website structure may have changed."
+                await teardown_playwright(playwright, browser, context)
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "message": "Export failed",
+                        "error": f"{error_msg}. The Linxo website structure may have changed."
+                    }
                 )
             
             # Fill in the email
@@ -274,9 +270,13 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                 error_msg = "Could not find password field on Linxo login page"
                 logger.error(error_msg)
                 await page.screenshot(path='password_field_not_found.png')
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=f"{error_msg}. The Linxo website structure may have changed or login failed."
+                await teardown_playwright(playwright, browser, context)
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "message": "Export failed",
+                        "error": f"{error_msg}. The Linxo website structure may have changed or login failed."
+                    }
                 )
             
             # Fill in the password
@@ -322,6 +322,19 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                     # Take a screenshot
                     await page.screenshot(path='verification_page.png')
                     
+                    if not gmail_available:
+                        error_msg = "Verification code required but Gmail API is not available. Please ensure GMAIL_TOKEN_JSON is valid or regenerate the token."
+                        logger.error(error_msg)
+                        await teardown_playwright(playwright, browser, context)
+                        return JSONResponse(
+                            status_code=503,
+                            content={
+                                "message": "Export failed",
+                                "error": error_msg,
+                                "gmail_required": True
+                            }
+                        )
+                    
                     # Fetch verification code from Gmail
                     verification_code = await asyncio.to_thread(get_linxo_verification_code, 60)
                     
@@ -329,9 +342,14 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
                         error_msg = "Could not retrieve verification code from Gmail within 60 seconds"
                         logger.error(error_msg)
                         await page.screenshot(path='verification_timeout.png')
-                        raise HTTPException(
-                            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                            detail=f"{error_msg}. Please check if Linxo sent the verification email."
+                        await teardown_playwright(playwright, browser, context)
+                        return JSONResponse(
+                            status_code=504,
+                            content={
+                                "message": "Export failed",
+                                "error": f"{error_msg}. Please check if Linxo sent the verification email.",
+                                "gmail_issue": True
+                            }
                         )
                     
                     logger.info(f"Retrieved verification code: {verification_code}")

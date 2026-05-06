@@ -113,11 +113,10 @@ def extract_verification_code(email_body):
 
 def verify_gmail_access():
     """
-    Verify that Gmail API access is working before attempting login.
-    Raises an exception if Gmail API is not accessible.
+    Verify that Gmail API access is working.
     
     Returns:
-        bool: True if Gmail API is accessible
+        bool: True if Gmail API is accessible, False otherwise
     """
     try:
         logger.info("Verifying Gmail API access...")
@@ -130,11 +129,8 @@ def verify_gmail_access():
         return True
     except Exception as e:
         error_msg = f"Gmail API verification failed: {str(e)}"
-        logger.error(error_msg)
-        raise Exception(
-            f"Cannot access Gmail API. {error_msg}\n"
-            "Please ensure GMAIL_TOKEN_JSON environment variable is set correctly."
-        )
+        logger.warning(f"{error_msg}. Gmail functionality will be unavailable.")
+        return False
 
 def get_linxo_verification_code(max_wait_seconds=60):
     """
