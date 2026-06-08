@@ -89,6 +89,8 @@ async def debug_env(api_key: str = Depends(verify_api_key)):
         "LINXO_PASSWORD": "set" if os.getenv("LINXO_PASSWORD") else "missing",
         "API_KEY": "set" if os.getenv("API_KEY") else "missing",
         "N8N_WEBHOOK_URL": "set" if os.getenv("N8N_WEBHOOK_URL") else "missing",
+        "BOUDGET_WEBHOOK_URL": "set" if os.getenv("BOUDGET_WEBHOOK_URL") else "missing",
+        "BOUDGET_API_KEY": "set" if os.getenv("BOUDGET_API_KEY") else "missing",
         "GMAIL_TOKEN_JSON": "set" if gmail_token else "missing",
         "GMAIL_TOKEN_JSON_length": len(gmail_token),
         "GMAIL_TOKEN_JSON_first_50": gmail_token[:50] if gmail_token else "N/A",
@@ -138,6 +140,8 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
     email = os.getenv("LINXO_EMAIL")
     password = os.getenv("LINXO_PASSWORD")
     webhook_url = os.getenv("N8N_WEBHOOK_URL")
+    boudget_webhook_url = os.getenv("BOUDGET_WEBHOOK_URL")
+    boudget_api_key = os.getenv("BOUDGET_API_KEY")
     
     if not email or not password:
         error_msg = "Missing Linxo credentials in environment variables"
@@ -701,6 +705,43 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
         webhook_error = "N8N_WEBHOOK_URL not configured"
         logger.warning("N8N_WEBHOOK_URL not set, skipping webhook send")
 
+    # Send raw CSV (UTF-16 LE, as produced by Linxo) to the boudget ingestion webhook
+    logger.info("Sending CSV to boudget webhook...")
+    boudget_webhook_success = False
+    boudget_webhook_error = None
+    if boudget_webhook_url:
+        try:
+            logger.info(f"Boudget webhook URL: {boudget_webhook_url}")
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    boudget_webhook_url,
+                    content=csv_content,
+                    headers={
+                        "Content-Type": "text/csv",
+                        "X-Api-Key": boudget_api_key or "",
+                    }
+                )
+                logger.info(f"Boudget webhook response status: {response.status_code}")
+                logger.info(f"Boudget webhook response body: {response.text[:200]}")
+                if response.status_code == 200:
+                    boudget_webhook_success = True
+                    logger.info("CSV successfully sent to boudget webhook")
+                else:
+                    boudget_webhook_error = f"Status {response.status_code}: {response.text[:200]}"
+                    logger.warning(f"boudget webhook returned non-200 status: {boudget_webhook_error}")
+        except httpx.TimeoutException as e:
+            boudget_webhook_error = f"Timeout: {str(e)}"
+            logger.error(f"Timeout sending CSV to boudget: {str(e)}")
+        except httpx.RequestError as e:
+            boudget_webhook_error = f"Request error: {str(e)}"
+            logger.error(f"Request error sending CSV to boudget: {str(e)}")
+        except Exception as e:
+            boudget_webhook_error = f"Unexpected error: {str(e)}"
+            logger.error(f"Unexpected error sending CSV to boudget: {str(e)}")
+    else:
+        boudget_webhook_error = "BOUDGET_WEBHOOK_URL not configured"
+        logger.warning("BOUDGET_WEBHOOK_URL not set, skipping boudget webhook send")
+
     # Save CSV locally after webhook attempt
     logger.info("Saving CSV locally...")
     local_save_path = "linxo_transactions.csv"
@@ -718,6 +759,8 @@ async def export_linxo_csv(api_key: str = Depends(verify_api_key)) -> JSONRespon
         "message": "CSV export completed",
         "webhook_sent": webhook_success,
         "webhook_error": webhook_error if not webhook_success else None,
+        "boudget_webhook_sent": boudget_webhook_success,
+        "boudget_webhook_error": boudget_webhook_error if not boudget_webhook_success else None,
         "local_save_success": local_save_success,
         "local_save_path": local_save_path if local_save_success else None,
         "csv_size_bytes": len(csv_content)
