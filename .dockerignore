@@ -83,3 +83,7 @@ node_modules/
 # Temporary files
 tmp/
 temp/
+
+# Secrets (never bake into the image)
+credentials.json
+token.json

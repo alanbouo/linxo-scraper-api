@@ -104,7 +104,7 @@ python main.py
 
 # Test it
 curl -X GET "http://localhost:8000/export-csv" \
-  -H "X-API-Key: 09822df397f1884ca6e54a618d537390e2170079f775be26bbd358affc648a66"
+  -H "X-API-Key: your_api_key_here"
 ```
 
 Your local setup is already working (the .env file has the token).
